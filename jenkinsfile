@@ -95,13 +95,13 @@ pipeline {
                                 sshTransfer(
                                     cleanRemote: false,
                                     excludes: '',
-                                    execCommand: "/bin/sh \$DOCKER_NGINX_DIR/reload.sh",
+                                    execCommand: "/bin/sh $DOCKER_NGINX_DIR/reload.sh",
                                     execTimeout: 120000,
                                     flatten: false,
                                     makeEmptyDirs: false,
                                     noDefaultExcludes: false,
                                     patternSeparator: '[, ]+',
-                                    remoteDirectory: "\$DOCKER_NGINX_VHOST_DIR",
+                                    remoteDirectory: "$DOCKER_NGINX_VHOST_DIR",
                                     remoteDirectorySDF: false,
                                     removePrefix: '',
                                     sourceFiles: '*.conf'
