@@ -1,0 +1,93 @@
+pipeline {
+    agent any
+
+    environment {
+        registry = 'https://hub.docker.shangxian.app'
+        registryRepo = 'hub.docker.shangxian.app/xuexb/demo'
+        containerId = 'demo-xuexb-com'
+    }
+
+    options {
+        timestamps()
+    }
+
+    stages {
+        stage('Clone source') {
+            steps {
+                checkout(
+                    poll: false,
+                    scm: [
+                        $class: 'GitSCM',
+                        branches: [[name: 'master']],
+                        doGenerateSubmoduleConfigurations: false,
+                        extensions: [
+                            [
+                                $class: 'CloneOption',
+                                noTags: true,
+                                reference: '',
+                                shallow: true
+                            ],
+                            [
+                                $class: 'RelativeTargetDirectory',
+                                relativeTargetDir: 'source'
+                            ]
+                        ],
+                        submoduleCfg: [],
+                        userRemoteConfigs: [[credentialsId: 'shangxianapp-github-xuexb-ssh-key', url: 'git@github.com:xuexb/demo.git']]
+                    ]
+                )
+            }
+        }
+
+        stage('Login docker') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-xiaowu', passwordVariable: 'password', usernameVariable: 'username')]) {
+                    sh "docker login --username $username --password $password $registry"
+                }
+            }
+        }
+
+        stage('Building image') {
+            steps {
+                sh "docker build -t $registryRepo:$BUILD_NUMBER source"
+            }
+        }
+
+        stage('Push image') {
+            steps {
+                sh "docker push $registryRepo:$BUILD_NUMBER"
+            }
+        }
+
+        stage('Remove unused docker image') {
+            steps {
+                sh "docker rmi $registryRepo:$BUILD_NUMBER"
+            }
+        }
+
+        stage('Run docker') {
+            steps {
+                withCredentials([sshUserPrivateKey(credentialsId: 'shangxianapp-xiaowu-ssh-key', keyFileVariable: 'identity', passphraseVariable: '', usernameVariable: 'userName')]) {
+                    script {
+                        def remote = [:]
+                        remote.name = 'sg02'
+                        remote.host = 'sg02.ddns.shangxian.app'
+                        remote.allowAnyHosts = true
+                        remote.user = userName
+                        remote.identityFile = identity
+                        sshCommand(
+                            remote: remote,
+                            command: "docker ps -aq --filter \"name=$containerId\" | xargs -r docker rm -f && docker run -d --name $containerId --restart=always --network \$DOCKER_PRIVATE_NETWORK_NAME $registryRepo:$BUILD_NUMBER"
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            deleteDir()
+        }
+    }
+}
